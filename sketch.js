@@ -11,13 +11,27 @@
  *  Envelope takes control of that node, turning the amplitude
  *  up and down like a volume knob.</p>
  */
-let R, inputMode;
-let pauseButton, resetButton, clearButton, systemButtonsDiv;
-let addNoteButton, deleteNotesButton, editNotesButton, noteButtonList, commandButtonsDiv;
-let startNoteInput, pitchClassNoteSelect, octaveNoteInput, durationNoteInput, volumeNoteSlider, startNoteSpan, pitchClassNoteSpan, octaveNoteSpan, durationNoteSpan, volumeNoteSpan, applyNoteButton, NoteInputsDiv;
-let tempStart, tempPitch, tempOctave, tempDuration, tempVolume;
-let spinner;
+let R, inputMode, spinner;
+let pauseButton, resetButton, clearButton, loadButton, systemButtonsDiv, addNoteButton,
+  deleteNotesButton, editNotesButton, noteButtonList, commandButtonsDiv,
+  startNoteInput, pitchClassNoteSelect, octaveNoteInput, durationNoteInput,
+  volumeNoteSlider, startNoteSpan, pitchClassNoteSpan, octaveNoteSpan,
+  durationNoteSpan, volumeNoteSpan, applyNoteButton, NoteInputsDiv,
+  noteChoiceSelect, noteChoiceSpan, noteChoiceDiv, tempStart, tempPitch,
+  tempOctave, tempDuration, tempVolume;
+
 const ALPHABET_SCALE = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const LOAD_DATA = [
+  [2, 3], [9, 3], [2, 4], [6, 4],
+  [4, 3], [9, 3], [1, 4], [4, 4],
+  [6, 3], [11, 3], [2, 4], [6, 4],
+  [6, 3], [9, 3], [1, 4], [6, 4],
+  [7, 2], [2, 3], [7, 3], [11, 3],
+  [2, 3], [6, 3], [9, 3], [2, 4],
+  [7, 2], [7, 3], [11, 3], [2, 4],
+  [9, 2], [4, 3], [9, 3], [1, 4],
+];
+
 class Note {
   constructor(start, pitchClass, octave, duration, volume) {
     this.start = start;
@@ -67,7 +81,7 @@ class Synth {
     this.envelope = new p5.Envelope();
 
     // set attackTime, decayTime, sustainRatio, releaseTime
-    this.envelope.setADSR(0.001, 0.5, 0.1, 0.5);
+    this.envelope.setADSR(0.003, 0.5, 0.1, 0.5);
     // set attackLevel, releaseLevel
     this.envelope.setRange(1, 0);
   }
@@ -76,7 +90,7 @@ class Synth {
    * function complete
    */
   playNote(note, masterVolume) {
-    this.envelope.setADSR(0.001, note.duration / 2, 0.1, note.duration / 2);
+    this.envelope.setADSR(0.003, note.duration / 2, 0.1, note.duration / 2);
     this.envelope.setRange(note.volume * masterVolume, 0);
     this.osc.freq(note.frequency);
 
@@ -98,13 +112,14 @@ class Spinner {
    * function will need tweaks for sure
    */
   draw(R) {
+    // setup
     const NOTES_r = [];
     background(255);
     fill("black");
     noStroke();
     if (inputMode) {
-      text("input mode: " + inputMode, 120, 20);
-      text("key code: " + keyCode, 140, 0);
+      text("input mode: " + inputMode, 120, 40);
+      text("key code: " + keyCode, 140, 20);
     }
     translate(width / 2, height / 2);
     noFill();
@@ -119,8 +134,8 @@ class Spinner {
         stroke('red');
       } else {
         noStroke();
-        fill('black');
-        text(ALPHABET_SCALE[i - 2], rNote, 0);
+        fill('red');
+        text(ALPHABET_SCALE[i - 2], rNote - 5, 0);
         noFill();
         if (ALPHABET_SCALE[i - 2].length == 1) {
           stroke('black');
@@ -137,7 +152,7 @@ class Spinner {
       line(cos(angle) * R / d, sin(angle) * R / d, cos(angle) * R, sin(angle) * R);
     }
     for (let note of this.noteList) {
-      note.draw(NOTES_r[note.pitchClass+1], volumeDrawingScale);
+      note.draw(NOTES_r[note.pitchClass + 1], volumeDrawingScale);
       if ((Math.round(this.headTime * 10000) / 10000) % 4 === note.start && this.play === true) {
         console.log('should make sound')
         this.synth.playNote(note, this.masterVolume);
@@ -154,15 +169,15 @@ class Spinner {
   }
   applyNote(mode, start, pitchClass, octave, duration, volume) {
     if (mode === "add note") {
-      this.addNote(start, pitchClass, octave, duration, volume);
+      this.addNote(new Note(start, pitchClass, octave, duration, volume));
     }
     else if (mode.match(/edit note \d+/)) {
       
     }
     else {console.log('apply note got called with ' + inputMode)}
   }
-  addNote(start, pitchClass, octave, duration, volume) {
-    this.noteList.push(new Note(start, pitchClass, octave, duration, volume));
+  addNote(note) {
+    this.noteList.push(note);
   }
   reset() {
     this.play = false;
@@ -172,7 +187,15 @@ class Spinner {
     this.play = !this.play;
   }
   clear() {
+    this.reset();
     this.noteList = [];
+  }
+  load() {
+    this.clear();
+    let i = 0;
+    LOAD_DATA.forEach( (noteData, i) => {
+      this.addNote(new Note(i*0.125, noteData[0], noteData[1], 0.50, 1));
+    });
   }
 }
 
@@ -192,32 +215,54 @@ function draw() {
 function createDOM(R, spinner) {
   systemButtonsDiv = createDiv();
   pauseButton = createButton("pause/resume");
-  pauseButton.mouseClicked(() => { spinner.pause(); });
+  pauseButton.mouseClicked( () => {
+    userStartAudio();
+    spinner.pause();
+  });
   pauseButton.size(100, 20);
   pauseButton.position(10, 10);
   resetButton = createButton("reset to time 0");
-  resetButton.mouseClicked(() => { spinner.reset(); });
+  resetButton.mouseClicked( () => {
+    spinner.reset();
+  });
   resetButton.size(100, 20);
   resetButton.position(10, 40);
   clearButton = createButton("clear all data");
-  clearButton.mouseClicked(() => { spinner.clear(); });
+  clearButton.mouseClicked( () => {
+    spinner.clear();
+  });
   clearButton.size(100, 20);
   clearButton.position(10, 70);
+  loadButton = createButton("load");
+  loadButton.mouseClicked( () =>  {
+    spinner.load();
+  })
+  loadButton.size(100, 20);
+  loadButton.position(110, 10);
   systemButtonsDiv.child(pauseButton);
   systemButtonsDiv.child(resetButton);
   systemButtonsDiv.child(clearButton);
+  systemButtonsDiv.child(loadButton);
 
   commandButtonsDiv = createDiv();
   addNoteButton = createButton("add note");
-  addNoteButton.mouseClicked(() => { inputMode = "add note"; });
+  addNoteButton.mouseClicked( () => {
+    inputMode = "add note";
+  });
   addNoteButton.size(100, 20);
   addNoteButton.position(width - 110, 10);
   deleteNotesButton = createButton("delete notes");
-  deleteNotesButton.mouseClicked(() => { inputMode = "delete notes"; });
+  deleteNotesButton.mouseClicked( () => { 
+    inputMode = "delete notes";
+    updateNoteChoiceSelect();
+  });
   deleteNotesButton.size(100, 20);
   deleteNotesButton.position(width - 110, 40);
   editNotesButton = createButton("edit notes");
-  editNotesButton.mouseClicked(() => { inputMode = "edit notes"; });
+  editNotesButton.mouseClicked( () => {
+    inputMode = "edit notes";
+    updateNoteChoiceSelect();
+  });
   editNotesButton.size(100, 20);
   editNotesButton.position(width - 110, 70);
   commandButtonsDiv.child(addNoteButton);
@@ -255,10 +300,9 @@ function createDOM(R, spinner) {
   volumeNoteSpan.position(width - 110, height - 80);
   applyNoteButton = createButton("Apply");
   applyNoteButton.mouseClicked(() => {
-    console.log(pitchClassNoteSelect.elt.selectedIndex)
     spinner.applyNote(
       inputMode,
-      parseInt(startNoteInput.value()),
+      parseFloat(startNoteInput.value()),
       pitchClassNoteSelect.elt.selectedIndex,
       parseInt(octaveNoteInput.value()),
       parseFloat(durationNoteInput.value()),
@@ -280,28 +324,54 @@ function createDOM(R, spinner) {
   noteInputsDiv.child(volumeNoteSpan);
   noteInputsDiv.child(volumeNoteSlider);
   noteInputsDiv.child(applyNoteButton);
+
+  noteChoiceDiv = createDiv();
+  noteChoiceSelect = createSelect();
+  noteChoiceSpan = createSpan("Note Select");
+  noteChoiceSpan.position(width - 90, height - 50);
+  noteChoiceSelect.position(width - 70, height - 30);
+  noteChoiceDiv.child(noteChoiceSpan);
+  noteChoiceDiv.child(noteChoiceSelect);
 }
 
 function updateDOM() {
   systemButtonsDiv.show();
   noteInputsDiv.hide();
+  noteChoiceDiv.hide();
   if (inputMode) {
     commandButtonsDiv.hide();
     if (inputMode === "add note" || inputMode.match(/edit note \d+/)) {
       noteInputsDiv.show();
       if (inputMode.match()) {
         iNote = inputMode.slice(10,-0)
+
       }
     }
-  } else {
+    else if (inputMode === "delete notes" || inputMode === "edit notes") {
+      noteChoiceDiv.show()
+    }
+  }
+  else {
     commandButtonsDiv.show();
   }
+}
+
+function updateNoteChoiceSelect() {
+  noteChoiceSelect.innerHTML = ""
+  spinner.noteList.forEach( (note, i) => {
+    noteChoiceSelect.option(
+      i.toString() + ': '
+      + ALPHABET_SCALE[note.pitchClass]
+      + note.octave.toString()
+    );
+  });
 }
 
 function keyPressed() {
   console.log(keyCode);
   // Spacebar
   if (keyCode == 32) {
+    userStartAudio();
     spinner.pause();
   }
   // Esc
