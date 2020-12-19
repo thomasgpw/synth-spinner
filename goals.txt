@@ -1,0 +1,11 @@
+goals:
+redo drawing
+better colors
+layer drawing better (reverse list traversal?)
+make delete
+add radial click touch interaction
+
+eventually:
+longer meter
+changable tempo
+drum sounds
